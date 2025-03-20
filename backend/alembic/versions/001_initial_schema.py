@@ -23,6 +23,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('leetcode_id', sa.Integer(), nullable=False),
         sa.Column('title', sa.String(), nullable=False),
+        sa.Column('title_slug', sa.String(), nullable=False),
         sa.Column('difficulty', sa.String(), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True),
@@ -33,6 +34,8 @@ def upgrade() -> None:
     )
     op.create_index('idx_questions_leetcode_id', 'questions',
                     ['leetcode_id'], unique=True)
+    op.create_index('idx_questions_title_slug', 'questions',
+                    ['title_slug'], unique=True)
 
     # Create tags table
     op.create_table(
@@ -108,6 +111,7 @@ def downgrade() -> None:
     # Drop indexes
     op.drop_index('idx_submissions_accepted')
     op.drop_index('idx_submissions_submitted_at')
+    op.drop_index('idx_questions_title_slug')
     op.drop_index('idx_questions_leetcode_id')
 
     # Drop tables in reverse order

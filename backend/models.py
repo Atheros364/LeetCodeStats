@@ -23,6 +23,7 @@ class Question(Base):
     id = Column(Integer, primary_key=True)
     leetcode_id = Column(Integer, unique=True, nullable=False)
     title = Column(String, nullable=False)
+    title_slug = Column(String, unique=True, nullable=False)
     # Constraint enforced by trigger
     difficulty = Column(String, nullable=False)
     description = Column(Text, nullable=True)

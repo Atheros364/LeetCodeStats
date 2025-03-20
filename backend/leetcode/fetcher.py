@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 import logging
 from datetime import datetime
 import asyncio
+import json
 
 from .auth import AuthenticationManager
 
@@ -220,3 +221,166 @@ class LeetCodeDataFetcher:
             return None
 
         return result['data']
+
+    async def fetch_all_solved_questions(self) -> List[Dict]:
+        """Fetch all questions solved by the user."""
+        username = await self._get_username()
+        if not username:
+            logger.error(
+                "Failed to get username for fetching solved questions")
+            return []
+
+        logger.info(f"Fetching all solved questions for user: {username}")
+        query = """
+        query userProgressQuestionList($filters: UserProgressQuestionListInput) {
+            userProgressQuestionList(filters: $filters) {
+                totalNum
+                questions {
+                    translatedTitle
+                    frontendId
+                    title
+                    titleSlug
+                    difficulty
+                    lastSubmittedAt
+                    numSubmitted
+                    questionStatus
+                    lastResult
+                    topicTags {
+                        name
+                        nameTranslated
+                        slug
+                    }
+                }
+            }
+        }
+        """
+
+        # Fetch all solved questions in batches of 50
+        batch_size = 50
+        offset = 0
+        all_questions = []
+
+        while True:
+            variables = {
+                "filters": {
+                    "skip": offset,
+                    "limit": batch_size
+                }
+            }
+
+            result = await self._execute_query(query, variables)
+            if not result or 'data' not in result:
+                logger.error("Failed to fetch solved questions")
+                break
+
+            questions_data = result['data']['userProgressQuestionList']
+            if not questions_data or not questions_data.get('questions'):
+                break
+
+            questions = questions_data['questions']
+            all_questions.extend(questions)
+
+            # If we got fewer questions than the batch size, we're done
+            if len(questions) < batch_size:
+                break
+
+            offset += batch_size
+            # Add a small delay to avoid rate limiting
+            await asyncio.sleep(0.5)
+
+        logger.info(
+            f"Successfully fetched {len(all_questions)} solved questions")
+        return all_questions
+
+    async def fetch_submissions_for_question(self, title_slug: str) -> List[Dict]:
+        """Fetch all submissions for a specific question."""
+        username = await self._get_username()
+        if not username:
+            logger.error("Failed to get username for fetching submissions")
+            return []
+
+        logger.info(f"Fetching submissions for question: {title_slug}")
+        query = """
+        query submissionList($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String!) {
+            questionSubmissionList(
+                offset: $offset
+                limit: $limit
+                lastKey: $lastKey
+                questionSlug: $questionSlug
+            ) {
+                lastKey
+                hasNext
+                submissions {
+                    id
+                    title
+                    titleSlug
+                    status
+                    statusDisplay
+                    lang
+                    langName
+                    runtime
+                    timestamp
+                    url
+                    isPending
+                    memory
+                    hasNotes
+                    notes
+                    flagType
+                    frontendId
+                    topicTags {
+                        id
+                    }
+                }
+            }
+        }
+        """
+
+        all_submissions = []
+        offset = 0
+        limit = 20
+        last_key = None
+
+        while True:
+            variables = {
+                "offset": offset,
+                "limit": limit,
+                "lastKey": last_key,
+                "questionSlug": title_slug
+            }
+
+            try:
+                result = await self._execute_query(query, variables)
+                if not result or 'data' not in result:
+                    logger.error(
+                        f"Failed to fetch submissions for question: {title_slug}")
+                    break
+
+                submission_list = result['data']['questionSubmissionList']
+                if not submission_list or not submission_list.get('submissions'):
+                    break
+
+                submissions = submission_list['submissions']
+                all_submissions.extend(submissions)
+
+                # Check if there are more pages
+                if not submission_list.get('hasNext'):
+                    break
+
+                last_key = submission_list.get('lastKey')
+                offset += limit
+
+                # Add a small delay to avoid rate limiting
+                await asyncio.sleep(0.5)
+
+            except Exception as e:
+                logger.error(
+                    f"Error fetching submissions for question {title_slug}: {str(e)}")
+                break
+
+        if not all_submissions:
+            logger.info(f"No submissions found for question: {title_slug}")
+        else:
+            logger.info(
+                f"Successfully fetched {len(all_submissions)} submissions for question: {title_slug}")
+
+        return all_submissions

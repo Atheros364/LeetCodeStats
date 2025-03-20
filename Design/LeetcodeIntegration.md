@@ -19,68 +19,103 @@ This document outlines the design for integrating with LeetCode's GraphQL API to
 
 ## GraphQL Queries
 
-### 1. Recent Submissions
+### 1. User Profile and Solved Questions
 ```graphql
-query recentAcSubmissions($username: String!, $limit: Int!) {
-  recentAcSubmissionList(username: $username, limit: $limit) {
-    id
-    title
-    titleSlug
-    timestamp
-    status
-    runtime
-    memory
-    code
-  }
-}
-```
-
-### 2. Question Metadata
-```graphql
-query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
-  problemsetQuestionList: questionList(
-    categorySlug: $categorySlug
-    limit: $limit
-    skip: $skip
-    filters: $filters
-  ) {
-    total: totalNum
-    questions: data {
-      questionId
+query userProgressQuestionList($filters: UserProgressQuestionListInput) {
+  userProgressQuestionList(filters: $filters) {
+    totalNum
+    questions {
+      translatedTitle
+      frontendId
       title
       titleSlug
       difficulty
-      content
+      lastSubmittedAt
+      numSubmitted
+      questionStatus
+      lastResult
       topicTags {
         name
-        id
+        nameTranslated
         slug
       }
     }
   }
 }
 ```
+This query provides:
+- Total number of solved questions
+- List of all solved questions with:
+  - Question metadata (title, difficulty, etc.)
+  - Number of submissions per question
+  - Last submission timestamp
+  - Question status and result
+  - Topic tags
 
-### 3. User Status Check
+### 2. Recent Submissions
 ```graphql
-query globalData {
-  userStatus {
-    userId
-    isSignedIn
-    isMockUser
-    isPremium
-    isVerified
-    username
-    avatar
-    isAdmin
-    isSuperuser
-    permissions
-    isTranslator
-    activeSessionId
-    checkedInToday
-    notificationStatus {
-      lastModified
-      numUnread
+query recentAcSubmissions($username: String!, $limit: Int!) {
+    recentAcSubmissionList(username: $username, limit: $limit) {
+        id
+        title
+        titleSlug
+        timestamp
+        lang
+    }
+}
+```
+This query provides:
+- Recent accepted submissions
+- Basic submission information
+
+### 3. Question Submissions
+```graphql
+query submissionList($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String!, $lang: String) {
+  submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: $questionSlug, lang: $lang) {
+    lastKey
+    hasNext
+    submissions {
+      id
+      statusDisplay
+      lang
+      runtime
+      timestamp
+      url
+      isPending
+      memory
+      submissionComment {
+        comment
+      }
+      runtimeDisplay
+      memoryDisplay
+      code
+      compareResult
+      titleDisplay
+      titleSlug
+      date
+      statusCode
+    }
+  }
+}
+```
+This query provides:
+- Paginated list of all submissions for a specific question
+- Detailed submission information including runtime, memory, and code
+- Support for pagination with offset and lastKey
+
+### 4. Question Metadata
+```graphql
+query questionContent($titleSlug: String!) {
+  question(titleSlug: $titleSlug) {
+    questionId
+    title
+    titleSlug
+    difficulty
+    content
+    topicTags {
+      name
+      id
+      slug
     }
   }
 }
@@ -199,30 +234,35 @@ On Error
 ```
 Start Historical Fetch
 ├── Initialize Database Connection
-├── Fetch All Submissions
-│   └── Use recentAcSubmissionList with limit=5000
-├── Process Submissions
-│   ├── Group by question_id
-│   └── Sort by timestamp
-├── Fetch Question Metadata
-│   └── Only for questions not in database
-└── Store Data
-    ├── Store submissions
-    └── Store new questions
+├── Fetch All Solved Questions
+│   └── Use userProgressQuestionList query to get:
+│       ├── Total number of solved questions
+│       └── List of all solved questions with:
+│           ├── Question metadata
+│           ├── Number of submissions
+│           └── Topic tags
+├── For Each Solved Question:
+│   ├── Store Question Metadata
+│   │   └── Store tags
+│   └── Fetch Recent Submissions
+│       └── Use recentAcSubmissionList query
+│           └── Store each submission
+└── Log completion
 ```
 
 ### Progress Tracking
-- Store last processed submission timestamp
-- Allow resuming from last successful point
-- Log progress percentage
+- Log total number of solved questions
+- Log progress for each question
+- Track pagination state for question list
+- Log number of submissions per question
 
 ### Error Handling
 ```
 On Error
 ├── Log error details
-├── Save progress (last processed submission)
+├── Save progress (last processed question)
 ├── Implement exponential backoff
-└── Resume from last processed submission
+└── Resume from last processed question
 ```
 
 ## Database Operations
@@ -284,9 +324,10 @@ ON CONFLICT (question_id, tag_id) DO NOTHING;
 - If max retries reached, wait for next interval
 
 ## Rate Limiting
-- Simple delay between API calls
-- Log rate limit warnings
+- Implement delay between API calls
+- Handle pagination carefully
 - Use exponential backoff for retries
+- Consider implementing request queuing
 
 ## Usage Examples
 
@@ -306,12 +347,14 @@ scheduler.start()
 ### Historical Data Fetch
 ```python
 # Initialize services
-auth_manager = AuthenticationManager(username, password)
+auth_manager = AuthenticationManager()
 data_fetcher = LeetCodeDataFetcher(auth_manager)
 db_writer = DatabaseWriter(db_url)
 
 # Fetch historical data
-await data_fetcher.fetch_historical_submissions(limit=5000)
+await data_fetcher.fetch_all_solved_questions()
+# For each question:
+await data_fetcher.fetch_submissions_for_question(question_slug)
 ```
 
 ## Error Recovery

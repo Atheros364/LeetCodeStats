@@ -83,7 +83,7 @@ cp .env.example .env
 
 4. Initialize the database:
 ```bash
-# The database will be automatically initialized on first run
+cd backend && alembic upgrade head && cd..
 ```
 
 5. Run the development server:

@@ -22,6 +22,7 @@ class Tag(TagBase):
 class QuestionBase(BaseModel):
     leetcode_id: str
     title: str
+    title_slug: str
     difficulty: str
     description: str
 
