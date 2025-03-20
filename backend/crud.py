@@ -15,8 +15,8 @@ from sqlalchemy import func, select, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
 from typing import List, Optional
-from models import Question, Tag, Submission
-from schemas import DailyStats, TagStats
+from .models import Question, Tag, Submission
+from .schemas import DailyStats, TagStats
 
 
 async def get_total_solved(db: AsyncSession) -> int:

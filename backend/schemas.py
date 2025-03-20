@@ -44,9 +44,6 @@ class SubmissionBase(BaseModel):
     question_id: int
     submitted_at: datetime
     status: str
-    runtime_ms: Optional[int] = None
-    memory_kb: Optional[int] = None
-    code: Optional[str] = None
 
 
 class SubmissionCreate(SubmissionBase):

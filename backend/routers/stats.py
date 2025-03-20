@@ -10,10 +10,10 @@ LeetCode activity, including:
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db
+from ..database import get_db
 from datetime import datetime
 from typing import Optional
-from crud import (
+from ..crud import (
     get_total_solved,
     get_current_streak,
     get_best_streak,
@@ -21,7 +21,7 @@ from crud import (
     get_daily_stats,
     get_tag_stats
 )
-from schemas import OverviewStats, DailyStats
+from ..schemas import OverviewStats, DailyStats
 
 router = APIRouter()
 

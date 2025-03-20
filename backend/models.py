@@ -59,9 +59,6 @@ class Submission(Base):
         'questions.id', ondelete='CASCADE'), nullable=False)
     submitted_at = Column(DateTime(timezone=True), nullable=False)
     status = Column(String, nullable=False)  # Constraint enforced by trigger
-    runtime_ms = Column(Integer, nullable=True)
-    memory_kb = Column(Integer, nullable=True)
-    code = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text(
         'CURRENT_TIMESTAMP'), nullable=False)
 

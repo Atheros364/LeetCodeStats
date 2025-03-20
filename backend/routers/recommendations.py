@@ -7,11 +7,11 @@ based on the user's solving history and patterns.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db
+from ..database import get_db
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
-from crud import get_recommendations
-from schemas import Recommendation
+from ..crud import get_recommendations
+from ..schemas import Recommendation
 
 router = APIRouter()
 

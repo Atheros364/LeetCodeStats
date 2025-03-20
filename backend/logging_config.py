@@ -10,9 +10,7 @@ import logging.handlers
 import os
 from pathlib import Path
 from typing import Optional
-from config import get_settings
-
-settings = get_settings()
+from config import settings
 
 
 def setup_logging(log_file: Optional[str] = None) -> None:

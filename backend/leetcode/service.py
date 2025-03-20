@@ -15,10 +15,7 @@ logger = logging.getLogger(__name__)
 
 class LeetCodeService:
     def __init__(self):
-        self.auth_manager = AuthenticationManager(
-            settings.LEETCODE_USERNAME,
-            settings.LEETCODE_PASSWORD
-        )
+        self.auth_manager = AuthenticationManager()
         self.data_fetcher = LeetCodeDataFetcher(self.auth_manager)
         self.scheduler = AsyncIOScheduler()
         self.is_running = False
@@ -28,9 +25,9 @@ class LeetCodeService:
         if self.is_running:
             return
 
-        # Initial login
-        if not await self.auth_manager.login():
-            logger.error("Failed to login to LeetCode")
+        # Initialize session
+        if not await self.auth_manager.initialize_session():
+            logger.error("Failed to initialize LeetCode session")
             return
 
         # Schedule regular polling
@@ -66,16 +63,20 @@ class LeetCodeService:
                 logger.info(f"Found {len(submissions)} recent submissions")
 
                 for submission in submissions:
-                    # Store submission
-                    if await writer.store_submission(submission):
-                        # If submission is new, fetch and store question metadata
-                        question_data = await self.data_fetcher.fetch_question_metadata(
-                            submission['titleSlug']
-                        )
-                        if question_data:
-                            question = await writer.store_question(question_data)
-                            if question and 'topicTags' in question_data:
-                                await writer.store_tags(question, question_data['topicTags'])
+                    # First fetch and store question metadata
+                    question_data = await self.data_fetcher.fetch_question_metadata(
+                        submission['titleSlug']
+                    )
+                    if question_data:
+                        question = await writer.store_question(question_data)
+                        if question and 'topicTags' in question_data:
+                            await writer.store_tags(question, question_data['topicTags'])
+
+                        # Now store the submission since we have the question
+                        await writer.store_submission(submission)
+                    else:
+                        logger.warning(
+                            f"Failed to fetch question data for submission: {submission['titleSlug']}")
 
         except Exception as e:
             logger.error(f"Error in poll_data: {str(e)}")
@@ -91,16 +92,20 @@ class LeetCodeService:
                 logger.info(f"Found {len(submissions)} historical submissions")
 
                 for submission in submissions:
-                    # Store submission
-                    if await writer.store_submission(submission):
-                        # If submission is new, fetch and store question metadata
-                        question_data = await self.data_fetcher.fetch_question_metadata(
-                            submission['titleSlug']
-                        )
-                        if question_data:
-                            question = await writer.store_question(question_data)
-                            if question and 'topicTags' in question_data:
-                                await writer.store_tags(question, question_data['topicTags'])
+                    # First fetch and store question metadata
+                    question_data = await self.data_fetcher.fetch_question_metadata(
+                        submission['titleSlug']
+                    )
+                    if question_data:
+                        question = await writer.store_question(question_data)
+                        if question and 'topicTags' in question_data:
+                            await writer.store_tags(question, question_data['topicTags'])
+
+                        # Now store the submission since we have the question
+                        await writer.store_submission(submission)
+                    else:
+                        logger.warning(
+                            f"Failed to fetch question data for submission: {submission['titleSlug']}")
 
         except Exception as e:
             logger.error(f"Error in fetch_historical_data: {str(e)}")

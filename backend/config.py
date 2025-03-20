@@ -8,6 +8,8 @@ Settings are loaded from environment variables with sensible defaults.
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
+import os
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -17,8 +19,6 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./leetcode_stats.db"
 
     # LeetCode API
-    LEETCODE_USERNAME: str
-    LEETCODE_PASSWORD: str
     LEETCODE_SESSION: Optional[str] = None
 
     # API Settings
@@ -40,7 +40,8 @@ class Settings(BaseSettings):
     TIMEZONE: str = "UTC"
 
     class Config:
-        env_file = ".env"
+        # Get the directory containing this config.py file
+        env_file = os.path.join(os.path.dirname(__file__), ".env")
         case_sensitive = True
 
 
@@ -52,3 +53,7 @@ def get_settings() -> Settings:
         Settings: Application settings
     """
     return Settings()
+
+
+# Create a settings instance for direct import
+settings = get_settings()

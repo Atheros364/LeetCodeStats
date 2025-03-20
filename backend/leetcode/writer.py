@@ -37,10 +37,7 @@ class DatabaseWriter:
             submission_data = {
                 'question_id': question.id,
                 'submitted_at': submitted_at,
-                'status': submission['status'],
-                'runtime_ms': submission['runtime'],
-                'memory_kb': submission['memory'],
-                'code': submission['code']
+                'status': 'Accepted'  # All submissions from recentAcSubmissionList are accepted
             }
 
             # Use SQLite's UPSERT

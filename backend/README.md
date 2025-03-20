@@ -88,7 +88,7 @@ cp .env.example .env
 
 5. Run the development server:
 ```bash
-uvicorn main:app --reload
+uvicorn backend.main:app --reload
 ```
 
 ## Development

@@ -63,9 +63,6 @@ def upgrade() -> None:
         sa.Column('question_id', sa.Integer(), nullable=False),
         sa.Column('submitted_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('status', sa.String(), nullable=False),
-        sa.Column('runtime_ms', sa.Integer(), nullable=True),
-        sa.Column('memory_kb', sa.Integer(), nullable=True),
-        sa.Column('code', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True),
                   server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
         sa.ForeignKeyConstraint(
