@@ -83,83 +83,53 @@ class LeetCodeService:
             logger.error(f"Error in poll_data: {str(e)}")
 
     async def fetch_historical_data(self):
-        """Fetch historical submission data."""
+        """Fetch all historical data from LeetCode."""
         try:
             async for db in get_db():
                 writer = DatabaseWriter(db)
 
                 # Fetch all solved questions
-                solved_questions = await self.data_fetcher.fetch_all_solved_questions()
-                logger.info(f"Found {len(solved_questions)} solved questions")
+                questions = await self.data_fetcher.fetch_all_solved_questions(db)
+                logger.info(
+                    f"Found {len(questions)} questions with new activity")
 
-                # Process each solved question
-                for question_data in solved_questions:
-                    title_slug = question_data.get('titleSlug')
-                    if not title_slug:
-                        logger.warning("Question data missing titleSlug")
-                        continue
-
-                    logger.info(f"Processing question: {title_slug}")
-                    logger.debug(
-                        f"Question data: {json.dumps(question_data, indent=2)}")
-
-                    # Prepare question metadata from the progress data
-                    question_metadata = {
-                        'questionId': question_data['frontendId'],
-                        'title': question_data['title'],
-                        'titleSlug': title_slug,
-                        'difficulty': question_data['difficulty'],
-                        'content': '',  # We'll fetch this separately if needed
-                        'topicTags': [
-                            {'name': tag['name'], 'id': '',
-                                'slug': tag['slug']}
-                            for tag in question_data.get('topicTags', [])
-                        ]
-                    }
-
-                    # Store question and tags
-                    logger.info(f"Storing question: {title_slug}")
-                    question = await writer.store_question(question_metadata)
-
-                    if question:
-                        logger.info(
-                            f"Successfully stored question: {title_slug}")
-                        if 'topicTags' in question_metadata:
-                            logger.info(
-                                f"Storing {len(question_metadata['topicTags'])} tags for question: {title_slug}")
-                            success = await writer.store_tags(question, question_metadata['topicTags'])
-                            if success:
-                                logger.info(
-                                    f"Successfully stored tags for question: {title_slug}")
-                            else:
-                                logger.error(
-                                    f"Failed to store tags for question: {title_slug}")
-                    else:
-                        logger.error(f"Failed to store question: {title_slug}")
-                        continue
-
-                    # Fetch recent submissions for this question
-                    logger.info(
-                        f"Fetching submissions for question: {title_slug}")
-                    submissions = await self.data_fetcher.fetch_submissions_for_question(title_slug)
-                    logger.info(
-                        f"Found {len(submissions)} submissions for question: {title_slug}")
-
-                    # Store each submission
-                    for submission in submissions:
-                        logger.info(
-                            f"Storing submission for question: {title_slug}")
-                        success = await writer.store_submission(submission)
-                        if success:
-                            logger.info(
-                                f"Successfully stored submission for question: {title_slug}")
-                        else:
+                for question_data in questions:
+                    try:
+                        # Store question metadata
+                        question = await writer.store_question(question_data)
+                        if not question:
                             logger.error(
-                                f"Failed to store submission for question: {title_slug}")
+                                f"Failed to store question: {question_data['titleSlug']}")
+                            continue
+
+                        # Store tags
+                        if question_data.get('topicTags'):
+                            success = await writer.store_tags(
+                                question, question_data['topicTags'])
+                            if not success:
+                                logger.error(
+                                    f"Failed to store tags for question: {question_data['titleSlug']}")
+
+                        # Fetch and store submissions
+                        submissions = await self.data_fetcher.fetch_submissions_for_question(
+                            question_data['titleSlug'], db)
+                        logger.info(
+                            f"Found {len(submissions)} new submissions for question: {question_data['titleSlug']}")
+
+                        for submission in submissions:
+                            success = await writer.store_submission(submission)
+                            if not success:
+                                logger.error(
+                                    f"Failed to store submission for question: {question_data['titleSlug']}")
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing question {question_data['titleSlug']}: {str(e)}", exc_info=True)
+                        continue
 
         except Exception as e:
             logger.error(
-                f"Error in fetch_historical_data: {str(e)}", exc_info=True)
+                f"Error fetching historical data: {str(e)}", exc_info=True)
 
     async def check_user_status(self) -> Optional[dict]:
         """Check the current user's status."""

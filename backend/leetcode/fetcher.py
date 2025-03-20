@@ -4,6 +4,8 @@ import logging
 from datetime import datetime
 import asyncio
 import json
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from .auth import AuthenticationManager
 
@@ -222,13 +224,24 @@ class LeetCodeDataFetcher:
 
         return result['data']
 
-    async def fetch_all_solved_questions(self) -> List[Dict]:
+    async def fetch_all_solved_questions(self, db: AsyncSession) -> List[Dict]:
         """Fetch all questions solved by the user."""
         username = await self._get_username()
         if not username:
             logger.error(
                 "Failed to get username for fetching solved questions")
             return []
+
+        # Get last submission timestamps from our database
+        query = """
+        SELECT q.title_slug, MAX(s.submitted_at) as last_submission
+        FROM questions q
+        LEFT JOIN submissions s ON q.id = s.question_id
+        GROUP BY q.title_slug
+        """
+        result = await db.execute(text(query))
+        last_submissions = {
+            row.title_slug: row.last_submission for row in result}
 
         logger.info(f"Fetching all solved questions for user: {username}")
         query = """
@@ -278,7 +291,32 @@ class LeetCodeDataFetcher:
                 break
 
             questions = questions_data['questions']
-            all_questions.extend(questions)
+
+            # Filter questions that have new submissions
+            for question in questions:
+                try:
+                    # Handle both integer timestamps and ISO format datetime strings
+                    last_submitted_at = question['lastSubmittedAt']
+                    if isinstance(last_submitted_at, str):
+                        # Parse ISO format datetime string
+                        last_submitted_at = datetime.fromisoformat(
+                            last_submitted_at.replace('Z', '+00:00'))
+                    else:
+                        # Handle integer timestamp
+                        last_submitted_at = datetime.fromtimestamp(
+                            int(last_submitted_at))
+
+                    db_last_submission = last_submissions.get(
+                        question['titleSlug'])
+
+                    if not db_last_submission or last_submitted_at > db_last_submission:
+                        all_questions.append(question)
+                        logger.info(
+                            f"Found new activity for question: {question['titleSlug']}")
+                except (ValueError, TypeError) as e:
+                    logger.error(
+                        f"Error parsing timestamp for question {question['titleSlug']}: {str(e)}")
+                    continue
 
             # If we got fewer questions than the batch size, we're done
             if len(questions) < batch_size:
@@ -288,16 +326,25 @@ class LeetCodeDataFetcher:
             # Add a small delay to avoid rate limiting
             await asyncio.sleep(0.5)
 
-        logger.info(
-            f"Successfully fetched {len(all_questions)} solved questions")
+        logger.info(f"Found {len(all_questions)} questions with new activity")
         return all_questions
 
-    async def fetch_submissions_for_question(self, title_slug: str) -> List[Dict]:
+    async def fetch_submissions_for_question(self, title_slug: str, db: AsyncSession) -> List[Dict]:
         """Fetch all submissions for a specific question."""
         username = await self._get_username()
         if not username:
             logger.error("Failed to get username for fetching submissions")
             return []
+
+        # Get the last submission timestamp from our database
+        query = """
+        SELECT MAX(submitted_at) as last_submission
+        FROM submissions s
+        JOIN questions q ON s.question_id = q.id
+        WHERE q.title_slug = :title_slug
+        """
+        result = await db.execute(text(query), {"title_slug": title_slug})
+        last_submission = result.scalar_one_or_none()
 
         logger.info(f"Fetching submissions for question: {title_slug}")
         query = """
@@ -360,7 +407,19 @@ class LeetCodeDataFetcher:
                     break
 
                 submissions = submission_list['submissions']
-                all_submissions.extend(submissions)
+
+                # Filter out submissions we already have
+                new_submissions = []
+                for submission in submissions:
+                    submission_time = datetime.fromtimestamp(
+                        int(submission['timestamp']))
+                    if not last_submission or submission_time > last_submission:
+                        new_submissions.append(submission)
+                    else:
+                        # If we hit an old submission, we can stop fetching more pages
+                        return all_submissions
+
+                all_submissions.extend(new_submissions)
 
                 # Check if there are more pages
                 if not submission_list.get('hasNext'):
@@ -378,9 +437,9 @@ class LeetCodeDataFetcher:
                 break
 
         if not all_submissions:
-            logger.info(f"No submissions found for question: {title_slug}")
+            logger.info(f"No new submissions found for question: {title_slug}")
         else:
             logger.info(
-                f"Successfully fetched {len(all_submissions)} submissions for question: {title_slug}")
+                f"Successfully fetched {len(all_submissions)} new submissions for question: {title_slug}")
 
         return all_submissions

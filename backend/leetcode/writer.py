@@ -80,11 +80,11 @@ class DatabaseWriter:
         try:
             # Prepare question data
             question_dict = {
-                'leetcode_id': question_data['questionId'],
+                'leetcode_id': question_data['frontendId'],
                 'title': question_data['title'],
                 'title_slug': question_data['titleSlug'],
                 'difficulty': question_data['difficulty'].lower(),
-                'description': question_data['content']
+                'description': question_data.get('content', '')
             }
 
             logger.debug(f"Storing question data: {question_dict}")
@@ -102,7 +102,7 @@ class DatabaseWriter:
             # Get the question instance
             question = await self.db.execute(
                 select(Question).where(Question.leetcode_id ==
-                                       question_data['questionId'])
+                                       question_data['frontendId'])
             )
             return question.scalar_one()
 
