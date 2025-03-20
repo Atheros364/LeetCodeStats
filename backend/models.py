@@ -1,53 +1,69 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Table
-from sqlalchemy.orm import relationship
-from database import Base
 from datetime import datetime
+from typing import List, Optional
+
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Table, text
+from sqlalchemy.orm import declarative_base, relationship
+
+Base = declarative_base()
+
+# Association table for question-tag many-to-many relationship
+question_tags = Table(
+    'question_tags',
+    Base.metadata,
+    Column('question_id', Integer, ForeignKey(
+        'questions.id', ondelete='CASCADE'), primary_key=True),
+    Column('tag_id', Integer, ForeignKey(
+        'tags.id', ondelete='CASCADE'), primary_key=True)
+)
 
 
 class Question(Base):
-    __tablename__ = "questions"
+    __tablename__ = 'questions'
 
-    id = Column(Integer, primary_key=True, index=True)
-    leetcode_id = Column(String(50), unique=True, nullable=False)
-    title = Column(String(255), nullable=False)
-    difficulty = Column(String(10), nullable=False)
-    description = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow,
-                        onupdate=datetime.utcnow)
+    id = Column(Integer, primary_key=True)
+    leetcode_id = Column(Integer, unique=True, nullable=False)
+    title = Column(String, nullable=False)
+    # Constraint enforced by trigger
+    difficulty = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=text(
+        'CURRENT_TIMESTAMP'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=text(
+        'CURRENT_TIMESTAMP'), nullable=False)
 
-    submissions = relationship("Submission", back_populates="question")
-    tags = relationship("Tag", secondary="question_tags",
-                        back_populates="questions")
+    # Relationships
+    tags = relationship('Tag', secondary=question_tags,
+                        back_populates='questions')
+    submissions = relationship(
+        'Submission', back_populates='question', cascade='all, delete-orphan')
 
 
 class Tag(Base):
-    __tablename__ = "tags"
+    __tablename__ = 'tags'
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), unique=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text(
+        'CURRENT_TIMESTAMP'), nullable=False)
 
+    # Relationships
     questions = relationship(
-        "Question", secondary="question_tags", back_populates="tags")
-
-
-class QuestionTag(Base):
-    __tablename__ = "question_tags"
-
-    question_id = Column(Integer, ForeignKey("questions.id"), primary_key=True)
-    tag_id = Column(Integer, ForeignKey("tags.id"), primary_key=True)
+        'Question', secondary=question_tags, back_populates='tags')
 
 
 class Submission(Base):
-    __tablename__ = "submissions"
+    __tablename__ = 'submissions'
 
-    id = Column(Integer, primary_key=True, index=True)
-    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
-    submitted_at = Column(DateTime, nullable=False)
-    status = Column(String(50), nullable=False)
+    id = Column(Integer, primary_key=True)
+    question_id = Column(Integer, ForeignKey(
+        'questions.id', ondelete='CASCADE'), nullable=False)
+    submitted_at = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String, nullable=False)  # Constraint enforced by trigger
     runtime_ms = Column(Integer, nullable=True)
     memory_kb = Column(Integer, nullable=True)
     code = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=text(
+        'CURRENT_TIMESTAMP'), nullable=False)
 
-    question = relationship("Question", back_populates="submissions")
+    # Relationships
+    question = relationship('Question', back_populates='submissions')
