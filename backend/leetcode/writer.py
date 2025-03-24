@@ -30,8 +30,22 @@ class DatabaseWriter:
                     f"Question not found for submission: {submission['titleSlug']}")
                 return False
 
-            # Convert timestamp to datetime (ensure it's an integer)
-            submitted_at = datetime.fromtimestamp(int(submission['timestamp']))
+            # Convert timestamp to datetime (handle both integer and ISO format)
+            timestamp = submission['timestamp']
+            try:
+                if isinstance(timestamp, (int, str)) and str(timestamp).isdigit():
+                    # Handle integer timestamp
+                    submitted_at = datetime.fromtimestamp(int(timestamp))
+                elif isinstance(timestamp, str):
+                    # Handle ISO format string
+                    submitted_at = datetime.fromisoformat(
+                        timestamp.replace('Z', '+00:00'))
+                else:
+                    logger.error(f"Invalid timestamp format: {timestamp}")
+                    return False
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error parsing timestamp {timestamp}: {str(e)}")
+                return False
 
             # Map status to valid values
             status = submission.get('statusDisplay', '')
@@ -59,14 +73,23 @@ class DatabaseWriter:
 
             logger.debug(f"Storing submission data: {submission_data}")
 
-            # Use SQLite's UPSERT
-            stmt = sqlite_insert(Submission).values(submission_data)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=['question_id', 'submitted_at'],
-                set_=submission_data
+            # First check if submission already exists with same question_id and submitted_at
+            existing = await self.db.execute(
+                select(Submission).where(
+                    Submission.question_id == question.id,
+                    Submission.submitted_at == submitted_at
+                )
             )
+            existing = existing.scalar_one_or_none()
 
-            await self.db.execute(stmt)
+            if existing:
+                # Update existing submission
+                existing.status = status
+            else:
+                # Create new submission
+                new_submission = Submission(**submission_data)
+                self.db.add(new_submission)
+
             await self.db.commit()
             return True
 

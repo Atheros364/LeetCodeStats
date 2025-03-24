@@ -76,8 +76,6 @@ def upgrade() -> None:
     )
     op.create_index('idx_submissions_submitted_at',
                     'submissions', ['submitted_at'])
-    op.create_index('idx_submissions_accepted', 'submissions', [
-                    'question_id', 'status'], unique=True, postgresql_where=sa.text("status = 'Accepted'"))
 
     # Add triggers for difficulty and status constraints
     op.execute("""
@@ -109,7 +107,6 @@ def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS check_status")
 
     # Drop indexes
-    op.drop_index('idx_submissions_accepted')
     op.drop_index('idx_submissions_submitted_at')
     op.drop_index('idx_questions_title_slug')
     op.drop_index('idx_questions_leetcode_id')
